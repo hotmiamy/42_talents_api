@@ -1,11 +1,10 @@
-from flask import request, jsonify, abort
+from flask import request, jsonify, abort, send_from_directory
 from app.models import db, Profile
 from sqlalchemy import text
 import os
 from werkzeug.utils import secure_filename
 from app import app
 
-UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
 
 def allowed_file(filename):
@@ -33,7 +32,7 @@ def register_routes(app):
             education=data.get('education'),
             idioms=data.get('idioms', []),
             bio=data.get('bio'),
-            open_to_work=data.get('open_to_work', True)
+            open_to_work=data.get('open_to_work', True),
         )
 
         db.session.add(new_profile)
@@ -64,8 +63,8 @@ def register_routes(app):
             return {"error": "No selected file"}, 400
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-            file.save(os.path.join(UPLOAD_FOLDER, filename))
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             profile = db.session.get(Profile, profile_id)
             if not profile:
                 abort(404, description="Profile not found")
@@ -80,7 +79,9 @@ def register_routes(app):
         profile = db.session.get(Profile, profile_id)
         if not profile:
             abort(404, description="Profile not found")
-        return send_from_directory(UPLOAD_FOLDER, profile.cv_filename, as_attachment=True)
+        elif not profile.cv_filename:
+            abort(404, description="CV not found")
+        return send_from_directory(app.config['UPLOAD_FOLDER'], profile.cv_filename, as_attachment=True)
 
     @app.route('/profiles', methods=['GET'])
     def list_profiles():
@@ -100,10 +101,10 @@ def register_routes(app):
         for field, values in filters.items():
             if field == 'skills':
                 for value in values:
-                    query = query.filter(text("EXIST (SELECT 1 FROM json_each(profile.skills) WHERE value = :value)")).bindparams(value=value)
+                    query = query.filter(Profile.skills.contains(value))
             elif field == 'idioms':
                 for value in values:
-                    query = query.filter(text("EXIST (SELECT 1 FROM json_each(profile.idioms) WHERE value = :value)")).bindparams(value=value)
+                    query = query.filter(Profile.idioms.contains(value))
             elif  field == 'locations':
                 query = query.filter(Profile.location.ilike(f"%{values[0]}%"))
 
@@ -145,6 +146,7 @@ def register_routes(app):
                         "idioms": profile.idioms,
                         "bio": profile.bio,
                         "open_to_work": profile.open_to_work,
+                        "cv_filename": profile.cv_filename,
                         "created_at": profile.created_at.isoformat() if profile.created_at else None
                         })
 

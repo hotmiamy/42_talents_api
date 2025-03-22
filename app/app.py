@@ -10,8 +10,10 @@ def create_app(config_name='default'):
 
     app.config.from_object(config[config_name])
 
-    database_url = os.environ.get('DATABASE_URL', 'sqlite:///talent.db')  # Fallback para SQLite
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url.replace("postgres://", "postgresql://", 1)
+    if app.config['SQLALCHEMY_DATABASE_URI'].startswith("postgres://"):
+        app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace(
+            "postgres://", "postgresql://", 1
+        )
 
     db.init_app(app)
 

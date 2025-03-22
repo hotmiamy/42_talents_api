@@ -1,16 +1,18 @@
 import pytest
 from flask import Flask
-from models import db, Profile
-from app import create_app
+from app.models import db, Profile
+from app.app import create_app
 from time import time
+from io import BytesIO
 
 @pytest.fixture(scope='function')
-def app():
+def app(tmpdir):
     # Cria a app de teste usando a mesma factory do app principal
-    app = create_app()
+    app = create_app(config_name='development')
     app.config.update({
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "UPLOAD_FOLDER": tmpdir.mkdir('uploads').strpath
     })
     
     # Cria o banco de dados dentro do contexto da app
@@ -47,7 +49,7 @@ def sample_profile(app):
 
 # Test POST for create a profile
 def test_create_profile(client):
-    response = client.post('/profile', json={
+    response = client.post('/profiles', json={
         "name": "New User",
         "email": "new@exaple.com",
         "phone": "123456789",
@@ -64,9 +66,56 @@ def test_create_profile(client):
     assert response.status_code == 201
     assert 'id' in response.json
 
+def test_upload_cv(client, sample_profile):
+    data = {
+        'file': (BytesIO(b'file content'), 'test.pdf')
+    }
+    response = client.post(
+        f'/profiles/{sample_profile}/cv',
+        data=data,
+        content_type='multipart/form-data')
+    
+    assert response.status_code == 200
+    assert 'filename' in response.json
+    assert response.json['filename'] == 'test.pdf'
+
+    profile = client.get(f'/profiles/{sample_profile}').json
+    assert profile['cv_filename'] == 'test.pdf'
+
+def test_download_cv(client, sample_profile):
+    data = {
+        'file': (BytesIO(b'file content'), 'test.pdf')
+    }
+    client.post(
+        f'/profiles/{sample_profile}/cv',
+        data=data,
+        content_type='multipart/form-data')
+
+    response = client.get(f'/profiles/{sample_profile}/cv')
+
+    assert response.status_code == 200
+    assert response.headers['Content-Disposition'] == 'attachment; filename=test.pdf'
+    assert response.data == b'file content'
+
+def test_download_noexistent_cv(client, sample_profile):
+    response = client.get(f'/profiles/{sample_profile}/cv')
+    assert response.status_code == 404
+
+def test_upload_invalid_file(client, sample_profile):
+    data = {
+        'file': (BytesIO(b'file content'), 'test.txt')
+    }
+    response = client.post(
+        f'/profiles/{sample_profile}/cv',
+        data=data,
+        content_type='multipart/form-data')
+    
+    assert response.status_code == 400
+    assert response.json['error'] == 'File type not allowed'
+
 # Test the get list of profiles
 def test_get_all_profiles(client, sample_profile):
-    response = client.get('/profile')
+    response = client.get('/profiles')
     assert response.status_code == 200
     data = response.json
     assert isinstance(data, list)
@@ -74,7 +123,7 @@ def test_get_all_profiles(client, sample_profile):
 
 # Test the filters
 def test_filter_profiles(client, sample_profile):
-    response = client.get('/profile?open_to_work=true')
+    response = client.get('/profiles?open_to_work=true')
     assert response.status_code == 200
     assert all(p['open_to_work'] is True for p in response.json)
 
@@ -91,7 +140,7 @@ def test_complex_filters(client, sample_profile):
 
 # Test the get a single profile
 def test_get_profile(client, sample_profile):
-    response = client.get(f'/profile/{sample_profile}')
+    response = client.get(f'/profiles/{sample_profile}')
     assert response.status_code == 200
     assert response.json['id'] == sample_profile
     assert response.json['name'] == "Test User"
@@ -105,7 +154,7 @@ def test_update_profile(client, sample_profile):
     }
 
     # Check if the profile was updated
-    response = client.put(f'/profile/{sample_profile}', json=update_data)
+    response = client.put(f'/profiles/{sample_profile}', json=update_data)
     assert response.status_code == 200
     data = response.json
 
@@ -115,10 +164,10 @@ def test_update_profile(client, sample_profile):
     assert "dev fullstack" in data['bio']
 
     # Check if the profile dont change other fields
-    original_profile = client.get(f'/profile/{sample_profile}').json
+    original_profile = client.get(f'/profiles/{sample_profile}').json
     assert original_profile['email'] == data['email']
     assert original_profile['created_at'] == data['created_at']
 
 def test_update_noexistent_profile(client):
-    response = client.put('/profile/999', json={"name": "Ghost"})
+    response = client.put('/profiles/999', json={"name": "Ghost"})
     assert response.status_code == 404
