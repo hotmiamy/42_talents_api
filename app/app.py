@@ -1,14 +1,14 @@
 from flask import Flask
-from models import db
-from routes import register_routes
-from config import config
+from app.models import db
+from app.routes import register_routes
+from config.config import config
 from flask_jwt_extended import JWTManager
 import os
 
 def create_app(config_name='default'):
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace("postgres://", "postgresql://", 1)
-    app.config.from_object(config[config_name])
+    app.config.from_object(config.config[config_name])
     db.init_app(app)
 
     register_routes(app)
