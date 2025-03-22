@@ -1,0 +1,41 @@
+name: Tests  # Nome do workflow
+on:  # Eventos que disparam a execução
+  push:  # Executa a cada push
+    branches: [ main ]
+  pull_request:  # Executa a cada pull request
+    branches: [ main ]
+
+jobs:
+  test:  # Nome do job
+    runs-on: ubuntu-latest  # Sistema operacional do runner
+
+    steps:
+    # Passo 1: Baixar o código do repositório
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Passo 2: Configurar Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.9"
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('config/requirements.txt') }}
+
+    - name: Install system dependencies
+      run: sudo apt-get install -y libpq-dev python3-dev
+
+    # Passo 3: Instalar dependências
+    - name: Install dependencies
+      working-directory: ./config
+      run: pip install -r requirements.txt
+
+    # Passo 4: Executar testes
+    - name: Run tests
+      env:
+        DATABASE_URL: sqlite:///test.db
+      run: pytest -v  # O "-v" mostra detalhes
