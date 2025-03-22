@@ -2,7 +2,7 @@ from flask import request, jsonify, abort
 from app.models import db, Profile
 from sqlalchemy import text
 import os
-from werkzeurg.utils import secure_filename
+from werkzeug.utils import secure_filename
 from app import app
 
 UPLOAD_FOLDER = 'uploads'
