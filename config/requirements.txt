@@ -2,3 +2,5 @@ flask
 flask-sqlalchemy
 pytest
 flask-jwt-extended
+gunicorn
+psycopg2-binary
