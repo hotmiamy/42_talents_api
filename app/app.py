@@ -7,9 +7,12 @@ import os
 
 def create_app(config_name='default'):
     app = Flask(__name__)
+
+    app.config.from_object(config[config_name])
+
     database_url = os.environ.get('DATABASE_URL', 'sqlite:///talent.db')  # Fallback para SQLite
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url.replace("postgres://", "postgresql://", 1)
-    app.config.from_object(config[config_name])
+
     db.init_app(app)
 
     register_routes(app)
