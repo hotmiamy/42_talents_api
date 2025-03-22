@@ -1,5 +1,5 @@
 from flask import request, jsonify, abort
-from models import db, Profile
+from app.models import db, Profile
 from sqlalchemy import text
 import os
 from werkzeurg.utils import secure_filename
