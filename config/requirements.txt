@@ -1,0 +1,4 @@
+flask
+flask-sqlalchemy
+pytest
+flask-jwt-extended
