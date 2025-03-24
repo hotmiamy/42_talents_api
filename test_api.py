@@ -5,6 +5,9 @@ from app.app import create_app
 from time import time
 from io import BytesIO
 from flask_jwt_extended import create_access_token
+import os
+
+os.environ['DATABASE_URL'] = 'postgresql://user:password@localhost:5432/talent_db'
 
 @pytest.fixture(scope='function')
 def app(tmpdir):
