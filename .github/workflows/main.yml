@@ -52,6 +52,12 @@ jobs:
       working-directory: ./config
       run: |
         flask db upgrade
+      
+    - name: Debug database connection
+      run: |
+        psql -h localhost -U user -d talent_db -c "\dt"
+      env:
+        PGPASSWORD: password
 
     - name: Run tests
       env:
