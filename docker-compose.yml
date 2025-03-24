@@ -1,16 +1,14 @@
 services:
   web:
     build: .
+    env_file:
+      - .env
     ports:
       - 5000:5000
     environment:
+      - FLASK_APP=app.app
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
       - FLASK_ENV=production
-      - DATABASE_URL=postgresql://user:password@db:5432/talent_db
-      - SECRET_KEY=secrec_key
-      - UPLOAD_FOLDER=/uploads
-      - PGUSER=user
-      - PGPASSWORD=tUzCZqtJAQ52TOc4c92AX3eoEPSrn9w8
-      - PGDATABASE=talent_db
     depends_on:
       db:
         condition: service_healthy
@@ -20,10 +18,12 @@ services:
 
   db:
     image: postgres:13-alpine
+    env_file:
+      - .env
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=talent_db
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:

@@ -5,33 +5,24 @@ from app.app import create_app
 from time import time
 from io import BytesIO
 from flask_jwt_extended import create_access_token
-import os
-
-os.environ['DATABASE_URL'] = 'postgresql://user:password@localhost:5432/talent_db'
 
 @pytest.fixture(scope='function')
 def app(tmpdir):
-    # Cria a app de teste usando a mesma factory do app principal
-    app = create_app(config_name='development')
+    app = create_app(config_name='testing')
     app.config.update({
-        "TESTING": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
-        "UPLOAD_FOLDER": tmpdir.mkdir('uploads').strpath
+        "UPLOAD_FOLDER": tmpdir.mkdir('uploads').strpath,
     })
     
-    # Cria o banco de dados dentro do contexto da app
     with app.app_context():
         db.create_all()
     
     yield app
     
-    # Limpeza (opcional para SQLite em memória)
     with app.app_context():
         db.drop_all()
 
 @pytest.fixture
 def client(app):
-    # Cria um cliente de teste
     return app.test_client()
 
 # criate a test profile to use in multiple tests

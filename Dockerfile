@@ -18,7 +18,6 @@ COPY ./config/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-COPY . .
 COPY wait-for-postgres.sh wait-for-it.sh
 RUN chmod +x wait-for-it.sh
 
