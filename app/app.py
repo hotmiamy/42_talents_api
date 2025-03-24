@@ -4,10 +4,13 @@ from app.routes import register_routes
 from config.config import config
 from flask_jwt_extended import JWTManager
 import os
+from flask_marshmallow import Marshmallow
+from sqlalchemy import text 
+from sqlalchemy.exc import OperationalError
+import time
 
 def create_app(config_name='default'):
     app = Flask(__name__)
-
     app.config.from_object(config[config_name])
 
     if app.config['SQLALCHEMY_DATABASE_URI'].startswith("postgres://"):
@@ -16,11 +19,10 @@ def create_app(config_name='default'):
         )
 
     db.init_app(app)
+    jwt = JWTManager(app)
+    ma = Marshmallow(app)
 
     register_routes(app)
-
-    with app.app_context():
-        db.create_all()
 
     return app
 

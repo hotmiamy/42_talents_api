@@ -1,4 +1,5 @@
 name: Tests  # Nome do workflow
+
 on:  # Eventos que disparam a execução
   push:  # Executa a cada push
     branches: [ main ]
@@ -9,6 +10,21 @@ jobs:
   test:  # Nome do job
     runs-on: ubuntu-latest  # Sistema operacional do runner
 
+    services:  # Adicionar serviço PostgreSQL
+      postgres:
+        image: postgres:13-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: talent_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     # Passo 1: Baixar o código do repositório
     - name: Checkout code
@@ -18,7 +34,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: "3.9"
+        python-version: "3.11"
 
     - name: Cache dependencies
       uses: actions/cache@v3
@@ -37,5 +53,5 @@ jobs:
     # Passo 4: Executar testes
     - name: Run tests
       env:
-        DATABASE_URL: sqlite:///test.db
+        DATABASE_URL: postgresql://user:password@localhost:5432/talent_db
       run: pytest -v  # O "-v" mostra detalhes

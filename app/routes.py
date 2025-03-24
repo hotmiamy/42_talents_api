@@ -1,78 +1,67 @@
 from flask import request, jsonify, abort, send_from_directory
+from flask_jwt_extended import jwt_required, create_access_token
 from app.models import db, Profile
-from sqlalchemy import text
+from app.schemas import ProfileSchema, ValidationError, CVSchema
 import os
 from werkzeug.utils import secure_filename
-from app import app
 
 ALLOWED_EXTENSIONS = {'pdf'}
+profile_schema = ProfileSchema()
+profiles_schema = ProfileSchema(many=True)
+cv_schema = CVSchema()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def register_routes(app):
-    @app.route('/profiles', methods=['POST'])
-    def create_profile():
+    @app.route('/auth/login', methods=['POST'])
+    def login():
         data = request.get_json()
+        if data.get('username') == 'test' and data.get('password') == 'test':
+            access_token = create_access_token(identity='testuser')
+            return jsonify({'access_token': access_token}), 200
+        return jsonify({'error': 'Invalid username or password'}), 401 
 
-        if not data.get('name'):
-            return {"error": "name is required"}, 400
-        if not data.get('email'):
-            return {"error": "email is required"}, 400
+    @app.route('/profiles', methods=['POST'])
+    @jwt_required()
+    def create_profile():
+        try:
+            data = profile_schema.load(request.get_json())
 
-        new_profile = Profile(
-            name=data['name'],
-            email=data['email'],
-            phone=data.get('phone'),
-            location=data.get('location'),
-            linkedin_profile=data.get('linkedin_profile'),
-            github_profile=data.get('github_profile'),
-            skills=data.get('skills', []),
-            experience=data.get('experience'),
-            education=data.get('education'),
-            idioms=data.get('idioms', []),
-            bio=data.get('bio'),
-            open_to_work=data.get('open_to_work', True),
-        )
+            new_profile = Profile(**data)
 
-        db.session.add(new_profile)
-        db.session.commit()
+            db.session.add(new_profile)
+            db.session.commit()
 
-        return jsonify({"id": new_profile.id,
-                        "name": new_profile.name,
-                        "email": new_profile.email,
-                        "phone": new_profile.phone,
-                        "location": new_profile.location,
-                        "linkedin_profile": new_profile.linkedin_profile,
-                        "github_profile": new_profile.github_profile,
-                        "skills": new_profile.skills,
-                        "experience": new_profile.experience,
-                        "education": new_profile.education,
-                        "idioms": new_profile.idioms,
-                        "bio": new_profile.bio,
-                        "open_to_work": new_profile.open_to_work,
-                        "created_at": new_profile.created_at.isoformat()
-                        }), 201
+            return profile_schema.dump(new_profile), 201
+        except ValidationError as err:
+            return jsonify({"errors": err.messages}), 400
 
     @app.route('/profiles/<int:profile_id>/cv', methods=['POST'])
+    @jwt_required()
     def upload_cv(profile_id):
-        if 'file' not in request.files:
-          return {"error": "No file part"}, 400
-        file = request.files['file']
-        if file.filename == '':
-            return {"error": "No selected file"}, 400
-        if file and allowed_file(file.filename):
+        try:
+            cv_schema.load({'file': request.files['file']})
+
+            file = request.files['file']
             filename = secure_filename(file.filename)
+
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
             profile = db.session.get(Profile, profile_id)
             if not profile:
                 abort(404, description="Profile not found")
+
             profile.cv_filename = filename
             db.session.commit()
+
             return {'message': 'File uploaded', 'filename': filename}, 200
-        else: 
-            return {"error": "File type not allowed"}, 400
+
+        except ValidationError as err:
+            return jsonify({"errors": err.messages}), 400
+        except KeyError:
+            return {"errors": {"file": "file is required"}}, 400
 
     @app.route('/profiles/<int:profile_id>/cv', methods=['GET'])
     def download_cv(profile_id):
@@ -85,7 +74,7 @@ def register_routes(app):
 
     @app.route('/profiles', methods=['GET'])
     def list_profiles():
-        query = Profile.query
+        query = Profile.query   
 
         open_to_work = request.args.get('open_to_work')
         if open_to_work in ['true', 'false']:
@@ -110,21 +99,7 @@ def register_routes(app):
 
         profiles = query.all()
     
-        return jsonify([{"id": profile.id,
-                        "name": profile.name,
-                        "email": profile.email,
-                        "phone": profile.phone,
-                        "location": profile.location,
-                        "linkedin_profile": profile.linkedin_profile,
-                        "github_profile": profile.github_profile,
-                        "skills": profile.skills,
-                        "experience": profile.experience,
-                        "education": profile.education,
-                        "idioms": profile.idioms,
-                        "bio": profile.bio,
-                        "open_to_work": profile.open_to_work,
-                        "created_at": profile.created_at.isoformat() if profile.created_at else None
-                        } for profile in profiles])
+        return jsonify(profiles_schema.dump(profiles))
     
     @app.route('/profiles/<int:profile_id>', methods=['GET'])
     def get_profile(profile_id):
@@ -133,59 +108,25 @@ def register_routes(app):
         if not profile:
             abort(404, description="Profile not found")
 
-        return jsonify({"id": profile.id,
-                        "name": profile.name,
-                        "email": profile.email,
-                        "phone": profile.phone,
-                        "location": profile.location,
-                        "linkedin_profile": profile.linkedin_profile,
-                        "github_profile": profile.github_profile,
-                        "skills": profile.skills,
-                        "experience": profile.experience,
-                        "education": profile.education,
-                        "idioms": profile.idioms,
-                        "bio": profile.bio,
-                        "open_to_work": profile.open_to_work,
-                        "cv_filename": profile.cv_filename,
-                        "created_at": profile.created_at.isoformat() if profile.created_at else None
-                        })
+        return profile_schema.dump(profile)
 
     @app.route('/profiles/<int:profile_id>', methods=['PUT'])
+    @jwt_required()
     def update_profile(profile_id):
-        profile = db.session.get(Profile, profile_id)
+        try:
+            profile = db.session.get(Profile, profile_id)
 
-        if not profile:
-            abort(404, description="Perfil não encontrado")
+            if not profile:
+                abort(404, description="Perfil não encontrado")
 
-        data = request.get_json()
+            data = profile_schema.load(request.get_json(), partial=True)
 
-        for key, value in data.items():
-            if key in ['id', 'created_at']:
-                continue
-
-            if hasattr(profile, key):
-                if key == 'skills' or key == 'idioms':
-                    if isinstance(value, list):
-                        setattr(profile, key, value)
-                    else:
-                        setattr(profile, key, [value])
-                else:
-                    setattr(profile, key, value)
+            for key, value in data.items():
+                if key in ['id', 'created_at']:
+                  continue
+                setattr(profile, key, value)
     
-        db.session.commit()
-
-        return jsonify({"id": profile.id,
-                        "name": profile.name,
-                        "email": profile.email,
-                        "phone": profile.phone,
-                        "location": profile.location,
-                        "linkedin_profile": profile.linkedin_profile,
-                        "github_profile": profile.github_profile,
-                        "skills": profile.skills,
-                        "experience": profile.experience,
-                        "education": profile.education,
-                        "idioms": profile.idioms,
-                        "bio": profile.bio,
-                        "open_to_work": profile.open_to_work,
-                        "created_at": profile.created_at.isoformat() if profile.created_at else None
-                        }), 200
+            db.session.commit()
+            return profile_schema.dump(profile), 200
+        except ValidationError as err:
+            return jsonify({"errors": err.messages}), 400

@@ -4,6 +4,7 @@ from app.models import db, Profile
 from app.app import create_app
 from time import time
 from io import BytesIO
+from flask_jwt_extended import create_access_token
 
 @pytest.fixture(scope='function')
 def app(tmpdir):
@@ -34,23 +35,26 @@ def client(app):
 @pytest.fixture
 def sample_profile(app):
     with app.app_context():
-
-        unique_email = f"test_{int(time())}@example.com"
-
         profile = Profile(
             name="Test User",
-            email=unique_email,
+            email=f"test_{int(time())}@example.com",
             skills=["Python", "Flask"],
-            open_to_work=True
+            open_to_work=True,
+            linkedin_profile="https://linkedin.com/test"
         )
         db.session.add(profile)
         db.session.commit()
         return profile.id
+    
+@pytest.fixture
+def auth_headers(app):
+    with app.app_context():
+        access_token = create_access_token(identity='testuser')
+        return {'Authorization': f'Bearer {access_token}'}
 
 # Test POST for create a profile
-def test_create_profile(client):
-    response = client.post('/profiles', json={
-        "name": "New User",
+def test_create_profile(client, auth_headers):
+    valid_data = { "name": "New User",
         "email": "new@exaple.com",
         "phone": "123456789",
         "location": "Test City",
@@ -62,18 +66,35 @@ def test_create_profile(client):
         "idioms": ["English", "Spanish"],
         "bio": "Test bio",
         "open_to_work": True
-    })
+    }
+    response = client.post('/profiles', json=valid_data, headers=auth_headers)
     assert response.status_code == 201
     assert 'id' in response.json
 
-def test_upload_cv(client, sample_profile):
+    # test for invalid email
+    invalid_email_data = valid_data.copy()
+    invalid_email_data['email'] = 'invalid-email'
+    response = client.post('/profiles', json=invalid_email_data, headers=auth_headers)
+    assert response.status_code == 400
+    assert 'email' in response.json['errors']
+
+    # test for too many skills
+    invalid_skills_data = valid_data.copy()
+    invalid_skills_data['skills'] = [f"skills{i}" for i in range(11)]
+    response = client.post('/profiles', json=invalid_skills_data, headers=auth_headers)
+    assert response.status_code == 400
+    assert 'skills' in response.json['errors']
+
+def test_upload_cv(client, sample_profile, auth_headers):
     data = {
         'file': (BytesIO(b'file content'), 'test.pdf')
     }
     response = client.post(
         f'/profiles/{sample_profile}/cv',
         data=data,
-        content_type='multipart/form-data')
+        content_type='multipart/form-data',
+        headers=auth_headers
+    )
     
     assert response.status_code == 200
     assert 'filename' in response.json
@@ -82,14 +103,16 @@ def test_upload_cv(client, sample_profile):
     profile = client.get(f'/profiles/{sample_profile}').json
     assert profile['cv_filename'] == 'test.pdf'
 
-def test_download_cv(client, sample_profile):
+def test_download_cv(client, sample_profile, auth_headers):
     data = {
         'file': (BytesIO(b'file content'), 'test.pdf')
     }
     client.post(
         f'/profiles/{sample_profile}/cv',
         data=data,
-        content_type='multipart/form-data')
+        content_type='multipart/form-data',
+        headers=auth_headers
+    )
 
     response = client.get(f'/profiles/{sample_profile}/cv')
 
@@ -101,17 +124,36 @@ def test_download_noexistent_cv(client, sample_profile):
     response = client.get(f'/profiles/{sample_profile}/cv')
     assert response.status_code == 404
 
-def test_upload_invalid_file(client, sample_profile):
-    data = {
+def test_upload_invalid_file(client, sample_profile, auth_headers):
+    invalid_type_data = {
         'file': (BytesIO(b'file content'), 'test.txt')
     }
     response = client.post(
         f'/profiles/{sample_profile}/cv',
-        data=data,
-        content_type='multipart/form-data')
+        data=invalid_type_data,
+        content_type='multipart/form-data',
+        headers=auth_headers
+    )
     
     assert response.status_code == 400
-    assert response.json['error'] == 'File type not allowed'
+    assert 'file' in response.json['errors']
+    assert 'Only PDF files are allowed' in response.json['errors']['file'][0]
+
+def test_upload_large_file(client, sample_profile, auth_headers):
+    large_file = b'a' * (5 * 1024 * 1024 + 1)
+    large_data = {
+        'file': (BytesIO(large_file), 'big.pdf')
+    }
+    response = client.post(
+        f'/profiles/{sample_profile}/cv',
+        data=large_data,
+        content_type='multipart/form-data',
+        headers=auth_headers
+    )
+
+    assert response.status_code == 400
+    assert 'file' in response.json['errors']
+    assert 'exceeds 5MB' in response.json['errors']['file'][0]
 
 # Test the get list of profiles
 def test_get_all_profiles(client, sample_profile):
@@ -145,7 +187,7 @@ def test_get_profile(client, sample_profile):
     assert response.json['id'] == sample_profile
     assert response.json['name'] == "Test User"
 
-def test_update_profile(client, sample_profile):
+def test_update_profile(client, sample_profile, auth_headers):
     update_data = {
         "name": "Updated User",
         "skills": ["Django", "APIs", "Python"],
@@ -154,7 +196,11 @@ def test_update_profile(client, sample_profile):
     }
 
     # Check if the profile was updated
-    response = client.put(f'/profiles/{sample_profile}', json=update_data)
+    response = client.put(
+        f'/profiles/{sample_profile}',
+        json=update_data,
+        headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.json
 
@@ -168,6 +214,16 @@ def test_update_profile(client, sample_profile):
     assert original_profile['email'] == data['email']
     assert original_profile['created_at'] == data['created_at']
 
-def test_update_noexistent_profile(client):
-    response = client.put('/profiles/999', json={"name": "Ghost"})
+    # invalid URL for linkedin_profile
+    invalid_data = {"linkedin_profile": "invalid-url"}
+    response = client.put(
+        f'/profiles/{sample_profile}',
+        json=invalid_data,
+        headers=auth_headers
+    )
+    assert response.status_code == 400
+    assert 'linkedin_profile' in response.json['errors']
+
+def test_update_noexistent_profile(client, auth_headers):
+    response = client.put('/profiles/999', json={"name": "Ghost"}, headers=auth_headers)
     assert response.status_code == 404

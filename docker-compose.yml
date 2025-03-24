@@ -1,0 +1,22 @@
+services:
+  web:
+    build: .
+    ports:
+      - 5000:5000
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://user:password@db:5432/talent_db
+      - SECRET_KEY=secrec_key
+      - UPLOAD_FOLDER=/uploads
+      - PGUSER=user
+      - PGPASSWORD=tUzCZqtJAQ52TOc4c92AX3eoEPSrn9w8
+      - PGDATABASE=talent_db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["./wait-for-postgres.sh", "db", "5432", "--", "gunicorn", "-b", "0.0.0.0:5000", "app.app:app"]
+    volumes:
+      - uploads:/uploads
+
+volumes:
+  uploads:
