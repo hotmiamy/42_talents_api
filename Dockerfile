@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-COPY start.sh start.sh
-RUN chmod +x start.sh
+COPY starts.sh starts.sh
+RUN chmod +x starts.sh
 
 CMD ["/app/start.sh"]
