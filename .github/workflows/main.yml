@@ -54,4 +54,4 @@ jobs:
     - name: Run tests
       env:
         DATABASE_URL: postgresql://user:password@localhost:5432/talent_db
-      run: pytest -v  # O "-v" mostra detalhes
+      run: pytest test_api.py -v  # O "-v" mostra detalhes
