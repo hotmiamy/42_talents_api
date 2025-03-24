@@ -48,6 +48,13 @@ jobs:
         echo "FLASK_APP=app.app" >> $GITHUB_ENV
         echo "DATABASE_URL=postgresql://user:password@localhost:5432/talent_db" >> $GITHUB_ENV
 
+    - name: Run database migrations
+      working-directory: ./config
+      run: |
+        flask db init
+        flask db migrate
+        flask db upgrade
+      
     - name: Debug database connection
       run: |
         psql -h localhost -U user -d talent_db -c "\dt"
