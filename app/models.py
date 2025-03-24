@@ -13,7 +13,7 @@ class Profile(db.Model):
     location = db.Column(db.String(100))
     linkedin_profile = db.Column(db.String(200))
     github_profile = db.Column(db.String(200))
-    skills = db.Column(db.JSON)
+    skills = db.Column(db.JSONB)
     experience = db.Column(db.Text)
     education = db.Column(db.Text)
     idioms = db.Column(db.JSON)

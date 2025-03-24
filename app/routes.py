@@ -90,7 +90,7 @@ def register_routes(app):
         for field, values in filters.items():
             if field == 'skills':
                 for value in values:
-                    query = query.filter(Profile.skills.contains(value))
+                    query = query.filter(Profile.skills.contains([value]))
             elif field == 'idioms':
                 for value in values:
                     query = query.filter(Profile.idioms.contains(value))
