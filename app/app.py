@@ -8,6 +8,7 @@ from flask_marshmallow import Marshmallow
 from sqlalchemy import text 
 from sqlalchemy.exc import OperationalError
 import time
+from flask_migrate import Migrate
 
 def create_app(config_name='default'):
     app = Flask(__name__)
@@ -21,6 +22,7 @@ def create_app(config_name='default'):
     db.init_app(app)
     jwt = JWTManager(app)
     ma = Marshmallow(app)
+    Migrate(app, db)
 
     register_routes(app)
 
