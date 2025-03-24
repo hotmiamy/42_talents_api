@@ -18,5 +18,20 @@ services:
     volumes:
       - uploads:/uploads
 
+  db:
+    image: postgres:13-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=talent_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d talent_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
+  db_data:
   uploads:

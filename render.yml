@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: talents
-    runtime: docker
-    env: python
-    database:
-      postgresql: talent-db
